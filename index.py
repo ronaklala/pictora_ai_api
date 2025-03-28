@@ -16,7 +16,7 @@ from dotenv import dotenv_values
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
-load_dotenv()
+secrets = dotenv_values(".env")
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -27,23 +27,23 @@ COLLECTION_ID = 'pictora_lala'
 # Initialize AWS clients
 rekognition_client = boto3.client(
     'rekognition',
-    aws_access_key_id=os.getenv("aws_access_key_id"),
-    aws_secret_access_key=os.getenv("aws_secret_access_key"),
-    region_name=os.getenv("aws_region")
+    aws_access_key_id=secrets["aws_access_key_id"],
+    aws_secret_access_key=secrets["aws_secret_access_key"],
+    region_name=secrets["aws_region"]
 )
 
 s3_client = boto3.client(
     's3',
-    aws_access_key_id=os.getenv("aws_access_key_id"),
-    aws_secret_access_key=os.getenv("aws_secret_access_key"),
-    region_name=os.getenv("aws_region")
+    aws_access_key_id=secrets["aws_access_key_id"],
+    aws_secret_access_key=secrets["aws_secret_access_key"],
+    region_name=secrets["aws_region"]
 )
 
 dynamodb = boto3.resource(
     'dynamodb',
-    aws_access_key_id=os.getenv("aws_access_key_id"),
-    aws_secret_access_key=os.getenv("aws_secret_access_key"),
-    region_name=os.getenv("aws_region")
+    aws_access_key_id=secrets["aws_access_key_id"],
+    aws_secret_access_key=secrets["aws_secret_access_key"],
+    region_name=secrets["aws_region"]
 )
 
 table = dynamodb.Table('FaceRecognitionTable')
