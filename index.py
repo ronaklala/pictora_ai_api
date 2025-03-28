@@ -9,14 +9,15 @@ from flask_socketio import SocketIO, emit
 import boto3
 from PIL import Image  # Ensure Pillow is included in your Lambda Layer or deployment package
 import decimal
-from dotenv import dotenv_values
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-print(os.environ)
 CORS(app)
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,23 +29,23 @@ COLLECTION_ID = 'pictora_lala'
 # Initialize AWS clients
 rekognition_client = boto3.client(
     'rekognition',
-    aws_access_key_id=os.environ.get("aws_access_key_id"),
-    aws_secret_access_key=os.environ.get("aws_secret_access_key"),
-    region_name=os.environ.get("aws_region")
+    aws_access_key_id=os.env("aws_access_key_id"),
+    aws_secret_access_key=os.env("aws_secret_access_key"),
+    region_name=os.env("aws_region")
 )
 
 s3_client = boto3.client(
     's3',
-    aws_access_key_id=os.environ.get("aws_access_key_id"),
-    aws_secret_access_key=os.environ.get("aws_secret_access_key"),
-    region_name=os.environ.get("aws_region")
+    aws_access_key_id=os.env("aws_access_key_id"),
+    aws_secret_access_key=os.env("aws_secret_access_key"),
+    region_name=os.env("aws_region")
 )
 
 dynamodb = boto3.resource(
     'dynamodb',
-    aws_access_key_id=os.environ.get("aws_access_key_id"),
-    aws_secret_access_key=os.environ.get("aws_secret_access_key"),
-    region_name=os.environ.get("aws_region")
+    aws_access_key_id=os.env("aws_access_key_id"),
+    aws_secret_access_key=os.env("aws_secret_access_key"),
+    region_name=os.env("aws_region")
 )
 
 table = dynamodb.Table('FaceRecognitionTable')
