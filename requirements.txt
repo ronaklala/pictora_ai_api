@@ -1,1 +1,6 @@
-Flask==3.0.3
+Flask
+flask-cors
+flask-socketio
+boto3
+Pillow
+python-dotenv
