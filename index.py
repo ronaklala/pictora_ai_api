@@ -15,6 +15,8 @@ from dotenv import dotenv_values
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+print(os.environ)
 CORS(app)
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
