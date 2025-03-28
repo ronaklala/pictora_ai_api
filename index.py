@@ -12,11 +12,11 @@ import decimal
 from dotenv import dotenv_values
 
 
-secrets = dotenv_values(".env")
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
+secrets = dotenv_values(".env")
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,22 +30,23 @@ rekognition_client = boto3.client(
     'rekognition',
     aws_access_key_id=secrets["aws_access_key_id"],
     aws_secret_access_key=secrets["aws_secret_access_key"],
-    region_name=secrets["region_name"]
+    region_name=secrets["aws_region"]
 )
 
 s3_client = boto3.client(
     's3',
     aws_access_key_id=secrets["aws_access_key_id"],
     aws_secret_access_key=secrets["aws_secret_access_key"],
-    region_name=secrets["region_name"]
+    region_name=secrets["aws_region"]
 )
 
 dynamodb = boto3.resource(
     'dynamodb',
     aws_access_key_id=secrets["aws_access_key_id"],
     aws_secret_access_key=secrets["aws_secret_access_key"],
-    region_name=secrets["region_name"]
+    region_name=secrets["aws_region"]
 )
+
 table = dynamodb.Table('FaceRecognitionTable')
 
 def delete_collection():
