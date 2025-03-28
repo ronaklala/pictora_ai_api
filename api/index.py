@@ -14,7 +14,6 @@ from dotenv import dotenv_values
 
 secrets = dotenv_values(".env")
 
-
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
