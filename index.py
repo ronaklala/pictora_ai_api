@@ -9,14 +9,13 @@ from flask_socketio import SocketIO, emit
 import boto3
 from PIL import Image  # Ensure Pillow is included in your Lambda Layer or deployment package
 import decimal
-from dotenv import dotenv_values
+from dotenv import load_dotenv
 
-
+load_dotenv()
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
-secrets = dotenv_values(".env")
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -27,23 +26,23 @@ COLLECTION_ID = 'pictora_lala'
 # Initialize AWS clients
 rekognition_client = boto3.client(
     'rekognition',
-    aws_access_key_id=secrets["aws_access_key_id"],
-    aws_secret_access_key=secrets["aws_secret_access_key"],
-    region_name=secrets["aws_region"]
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name=os.getenv("AWS_REGION")
 )
 
 s3_client = boto3.client(
     's3',
-    aws_access_key_id=secrets["aws_access_key_id"],
-    aws_secret_access_key=secrets["aws_secret_access_key"],
-    region_name=secrets["aws_region"]
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name=os.getenv("AWS_REGION")
 )
 
 dynamodb = boto3.resource(
     'dynamodb',
-    aws_access_key_id=secrets["aws_access_key_id"],
-    aws_secret_access_key=secrets["aws_secret_access_key"],
-    region_name=secrets["aws_region"]
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name=os.getenv("AWS_REGION")
 )
 
 table = dynamodb.Table('FaceRecognitionTable')
@@ -142,6 +141,7 @@ def delete_collection_route():
     """
     return delete_collection() 
 
+
 @app.route("/upload", methods=["POST"])
 def upload_images():
      # Assuming this function is defined elsewhere
@@ -210,11 +210,14 @@ def upload_images():
 
     # Index faces using Rekognition
     try:
+        print(original_s3_key, COLLECTION_ID, BUCKET_NAME)
         response = rekognition_client.index_faces(
             CollectionId=COLLECTION_ID,
             Image={'S3Object': {'Bucket': BUCKET_NAME, 'Name': original_s3_key}},
             DetectionAttributes=['ALL']
         )
+
+        
         
         logging.info(f"✅ Faces from '{original_s3_key}' indexed successfully in Rekognition.")
 
