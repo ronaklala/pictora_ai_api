@@ -4,3 +4,6 @@ flask-socketio
 boto3
 Pillow
 python-dotenv
+pytz
+python-multipart
+python-decouple
