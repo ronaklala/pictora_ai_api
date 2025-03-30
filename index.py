@@ -276,23 +276,20 @@ def upload_images():
 @app.route("/fetch_category_wise_data/<category_name>", methods=["GET"])
 def get_images_by_category(category_name):
     """
-    Fetch images from DynamoDB based on CategoryName.
-    
-    :param table_name: Name of the DynamoDB table
-    :param category_name: Category to filter (e.g., "bhabhi")
-    :return: List of image URLs
+    Fetch unique image rows from DynamoDB based on CategoryName, ensuring unique ImageID.
     """
-    
-    # Query DynamoDB
+
+    # Query DynamoDB to fetch all rows for the given category
     response = table.scan(
         FilterExpression="CategoryName = :category",
         ExpressionAttributeValues={":category": category_name}
     )
-    
-    # Extract image URLs
+
+    # Extract items and filter by unique ImageID
     items = response.get("Items", [])
-    
-    return jsonify(items)
+    unique_images = {item["ImageID"]: item for item in items}.values()  # Dictionary ensures uniqueness
+
+    return jsonify(list(unique_images))  # Convert to list and return
     
 @app.route("/search", methods=["POST"])
 def search_face():
@@ -332,7 +329,7 @@ def search_face():
         try:
             result = table.scan(
                 FilterExpression="FaceID = :face_id",
-                ExpressionAttributeValues={":face_id": face_id}
+                ExpressionAttributeValues={":face_id": face_id},
             )
             items = result.get("Items", [])
 
