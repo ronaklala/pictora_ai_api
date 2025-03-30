@@ -79,31 +79,60 @@ def convert_to_decimal(obj):
         return [convert_to_decimal(i) for i in obj]
     return obj
 
-def get_last_noface_id():
-    """Fetch the last NOFACE ID stored in DynamoDB."""
-    response = table.scan(FilterExpression="begins_with(FaceID, :prefix)", ExpressionAttributeValues={":prefix": "NOFACE"})
-    
-    if response['Items']:
-        last_noface_ids = [item['FaceID'] for item in response['Items']]
-        
-        if last_noface_ids:
-            return max(last_noface_ids)  # Return the maximum NOFACE ID found
-    
-    return "NOFACE_0"  # Default if none found
 
+def get_last_noface_id():
+    """Fetch the last NOFACE ID stored in DynamoDB, handling pagination."""
+    noface_ids = []
+    last_evaluated_key = None
+
+    while True:
+        # Perform scan with pagination support
+        scan_params = {
+            "FilterExpression": "begins_with(FaceID, :prefix)",
+            "ExpressionAttributeValues": {":prefix": "NOFACE"}
+        }
+        if last_evaluated_key:
+            scan_params["ExclusiveStartKey"] = last_evaluated_key  # Get next page
+
+        response = table.scan(**scan_params)
+
+        # Collect FaceIDs
+        noface_ids.extend(item['FaceID'] for item in response.get('Items', []))
+
+        # Check if there are more pages
+        last_evaluated_key = response.get("LastEvaluatedKey")
+        if not last_evaluated_key:
+            break  # Stop if no more pages
+
+    # Debugging: Print all retrieved NOFACE IDs
+    print("Retrieved NOFACE IDs:", noface_ids)
+
+    # If no NOFACE IDs found, return default
+    if not noface_ids:
+        return "NOFACE_0"
+
+    # Extract numeric part and get max
+    max_noface = max(noface_ids, key=lambda x: int(x.split("_")[1]))
+    return max_noface
 
 def increment_noface_id(last_noface_id):
-    """Increment the last NOFACE ID."""
+    """Correctly increment NOFACE ID with debugging."""
+    print("Incrementing from:", last_noface_id)
+
     if last_noface_id == "NOFACE_0":
         return "NOFACE_1"
     
     parts = last_noface_id.split("_")
-    
+    print("Split Parts:", parts)
+
     if len(parts) == 2 and parts[0] == "NOFACE":
         next_number = int(parts[1]) + 1
-        return f"NOFACE_{next_number}"
+        new_id = f"NOFACE_{next_number}"
+        print("Generated New ID:", new_id)
+        return new_id
     
-    return "NOFACE_0"  # Fallback
+    print("Returning default NOFACE_0 due to unexpected format")
+    return "NOFACE_0"
 
 @app.route('/fetch-all-data', methods=['GET'])
 def fetch_all_data_from_dynamodb():
@@ -245,7 +274,9 @@ def upload_images():
         
         else:
             # If no faces were detected, generate a new NOFACE ID
-            last_noface_id = get_last_noface_id()  # Function to get last NOFACE ID from DB
+            last_noface_id = get_last_noface_id()
+            print(last_noface_id)  # Function to get last NOFACE ID from DB
+            print(increment_noface_id(last_noface_id))  # Function to increment NOFACE ID
             new_noface_id = increment_noface_id(last_noface_id)  # Increment it
 
             table.put_item(Item={
@@ -274,22 +305,27 @@ def upload_images():
 
 
 @app.route("/fetch_category_wise_data/<category_name>", methods=["GET"])
+@app.route("/fetch_category_wise_data/<category_name>", methods=["GET"])
 def get_images_by_category(category_name):
     """
-    Fetch unique image rows from DynamoDB based on CategoryName, ensuring unique ImageID.
+    Fetch unique image rows from DynamoDB using query (faster than scan).
     """
 
-    # Query DynamoDB to fetch all rows for the given category
-    response = table.scan(
-        FilterExpression="CategoryName = :category",
+    unique_images = {}
+
+
+    response = table.query(
+        IndexName="CategoryIndex",  # Change to your actual GSI name
+        KeyConditionExpression="CategoryName = :category",
         ExpressionAttributeValues={":category": category_name}
     )
 
-    # Extract items and filter by unique ImageID
-    items = response.get("Items", [])
-    unique_images = {item["ImageID"]: item for item in items}.values()  # Dictionary ensures uniqueness
+    for item in response.get("Items", []):
+        if "ImageID" in item:
+            unique_images[item["ImageID"]] = item
 
-    return jsonify(list(unique_images))  # Convert to list and return
+    return jsonify(list(unique_images.values()))
+
     
 @app.route("/search", methods=["POST"])
 def search_face():
