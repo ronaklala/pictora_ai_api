@@ -10,6 +10,7 @@ import boto3
 from PIL import Image  # Ensure Pillow is included in your Lambda Layer or deployment package
 import decimal
 from dotenv import load_dotenv
+from boto3.dynamodb.conditions import Key
 
 load_dotenv()
 
@@ -303,28 +304,68 @@ def upload_images():
     return jsonify({'message': f'Image {file.filename} uploaded successfully!'}), 200
 
 
+@app.route("/fetch_count", methods=["GET"])
+def fetch_image_count():
+    unique_images = set()
+    last_evaluated_key = None
 
-@app.route("/fetch_category_wise_data/<category_name>", methods=["GET"])
+    while True:
+        query_params = {
+            "IndexName": "CategoryIndex",
+            "KeyConditionExpression": "CategoryName = :category",
+            "ExpressionAttributeValues": {":category": "Mata-Ki-Chowki"}
+        }
+        if last_evaluated_key:
+            query_params["ExclusiveStartKey"] = last_evaluated_key
+
+        response = table.query(**query_params)
+
+        for item in response.get("Items", []):
+            if "ImageID" in item:
+                unique_images.add(item["ImageID"])  # Add to unique set
+
+        last_evaluated_key = response.get("LastEvaluatedKey")
+        if not last_evaluated_key:
+            break
+
+    print(f"Total unique ImageID count: {len(unique_images)}")
+    return jsonify({"unique_image_count": len(unique_images)}), 200
+
 @app.route("/fetch_category_wise_data/<category_name>", methods=["GET"])
 def get_images_by_category(category_name):
     """
-    Fetch unique image rows from DynamoDB using query (faster than scan).
+    Fetch all unique image rows from DynamoDB using query pagination.
     """
+    try:
+        unique_images = {}  # Store unique images
+        last_evaluated_key = None  # For pagination
 
-    unique_images = {}
+        while True:
+            query_params = {
+                "IndexName": "CategoryIndex",  # Your GSI Name
+                "KeyConditionExpression": "#category = :category",
+                "ExpressionAttributeNames": {"#category": "CategoryName"},
+                "ExpressionAttributeValues": {":category": category_name}
+            }
 
+            if last_evaluated_key:
+                query_params["ExclusiveStartKey"] = last_evaluated_key  # Continue from last key
 
-    response = table.query(
-        IndexName="CategoryIndex",  # Change to your actual GSI name
-        KeyConditionExpression="CategoryName = :category",
-        ExpressionAttributeValues={":category": category_name}
-    )
+            response = table.query(**query_params)
 
-    for item in response.get("Items", []):
-        if "ImageID" in item:
-            unique_images[item["ImageID"]] = item
+            # Add only unique ImageID rows
+            for item in response.get("Items", []):
+                if "ImageID" in item:
+                    unique_images[item["ImageID"]] = item  # Store unique images
 
-    return jsonify(list(unique_images.values()))
+            last_evaluated_key = response.get("LastEvaluatedKey")  # Get next page key
+            if not last_evaluated_key:
+                break  # Stop if no more pages
+
+        return jsonify({"status": "success", "data": list(unique_images.values())}), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
     
 @app.route("/search", methods=["POST"])
@@ -344,7 +385,7 @@ def search_face():
         response = rekognition_client.search_faces_by_image(
             CollectionId=COLLECTION_ID,
             Image={"Bytes": image_bytes},  # Directly passing image bytes
-            FaceMatchThreshold=90,
+            FaceMatchThreshold=98,
             MaxFaces=1000
         )
 
@@ -356,18 +397,16 @@ def search_face():
     if not matched_faces:
         return jsonify({"MatchFound": False, "Message": "No matching face found."}), 404
 
+    face_ids = [match["Face"]["FaceId"] for match in matched_faces]
     all_matched_images = []
-    
-    # Retrieve all matching images from DynamoDB for each matched FaceID
-    for match in matched_faces:
-        face_id = match["Face"]["FaceId"]
 
-        try:
-            result = table.scan(
-                FilterExpression="FaceID = :face_id",
-                ExpressionAttributeValues={":face_id": face_id},
+    try:
+        # Fetch all matching records using Query instead of Scan
+        for face_id in face_ids:
+            response = table.query(
+                KeyConditionExpression=Key("FaceID").eq(face_id)
             )
-            items = result.get("Items", [])
+            items = response.get("Items", [])
 
             # ✅ Convert S3 paths to public URLs
             for item in items:
@@ -384,12 +423,45 @@ def search_face():
 
             all_matched_images.extend(items)
 
-        except Exception as e:
-            logging.error(f"❌ Error retrieving face metadata from DynamoDB: {str(e)}")
-            return jsonify({"error": "Failed to retrieve face metadata"}), 500
+    except Exception as e:
+        logging.error(f"❌ Error retrieving face metadata from DynamoDB: {str(e)}")
+        return jsonify({"error": "Failed to retrieve face metadata"}), 500
 
     return jsonify({"MatchFound": True, "MatchedImages": all_matched_images})
 
+
+@app.route('/update-data', methods=['GET'])
+def update_data():
+    try:
+        # Query using categoryIndex instead of Scan
+        response = table.query(
+            IndexName="CategoryIndex",  # Use your Global Secondary Index (GSI)
+            KeyConditionExpression="#category = :oldVal",
+            ExpressionAttributeNames={"#category": "CategoryName"},  
+            ExpressionAttributeValues={":oldVal": "Mata Ki Chowki"}
+        )
+
+        items = response.get("Items", [])
+
+        if not items:
+            return jsonify({"message": "No records found"}), 404
+
+        # Update each item
+        for item in items:
+            face_id = item["FaceID"]  # Primary Key
+
+            table.update_item(
+                Key={"FaceID": face_id},
+                UpdateExpression="SET #category = :newVal",
+                ExpressionAttributeNames={"#category": "CategoryName"},
+                ExpressionAttributeValues={":newVal": "Mata-Ki-Chowki"}
+            )
+            print("Updated item with FaceID: ", face_id)
+
+        return jsonify({"message": f"Updated {len(items)} items successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
